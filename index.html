@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek AI 聊天 - 支持深度思考模式</title>
+    <style>
+        :root {
+            --bg: #f9fafb;
+            --sidebar-bg: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --danger: #ef4444;
+            --success: #10b981;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --radius: 0.75rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .auth-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .auth-input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .auth-input-group input {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            background: #f3f4f6;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .user-info {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+
+        .conversations-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        .conversation-item {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.25rem;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .conversation-item:hover {
+            background: #f3f4f6;
+        }
+
+        .conversation-item.active {
+            background: #e0e7ff;
+            font-weight: 600;
+        }
+
+        .conversation-item .delete-btn {
+            visibility: hidden;
+            color: var(--danger);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        .conversation-item:hover .delete-btn {
+            visibility: visible;
+        }
+
+        .new-chat-btn {
+            margin: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+
+        .new-chat-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: #eef2ff;
+        }
+
+        /* 主区域 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .chat-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .deep-think-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #d1d5db;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input:checked+.toggle-slider {
+            background: var(--primary);
+        }
+
+        .toggle-switch input:checked+.toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: var(--primary);
+            color: white;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+            background: white;
+            border: 1px solid var(--border);
+        }
+
+        .thinking-badge {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+        }
+
+        .reasoning-content {
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: #fffbeb;
+            border-left: 3px solid #f59e0b;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            color: #78350f;
+            display: none;
+        }
+
+        .reasoning-content.show {
+            display: block;
+        }
+
+        .input-area {
+            padding: 1rem 1.5rem;
+            background: white;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .input-area textarea {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            resize: none;
+            font-family: inherit;
+            font-size: 0.95rem;
+            min-height: 50px;
+            max-height: 150px;
+        }
+
+        .input-area button {
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        .loading-dots {
+            display: inline-flex;
+            gap: 0.25rem;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--text-light);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                z-index: 10;
+                height: 100%;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== 配置区域：请替换为你自己的值 ==================== -->
+    <script type="module">
+        // ---------- Supabase 配置 ----------
+        const SUPABASE_CONFIG = {
+            url: 'https://tjmhmjgbwkhrgfcrdokn.supabase.co',    // 你的 Supabase 项目 URL
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqbWhtamdid2tocmdmY3Jkb2tuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODE5MTcsImV4cCI6MjA5NDQ1NzkxN30.nBy8GRMBcumMuMY5aLwgQR8LjKPTcUGS_CMFHq1dsvk',                 // 你的 Supabase anon key (公开安全)
+        };
+
+        // ---------- DeepSeek API 配置 ----------
+        const DEEPSEEK_CONFIG = {
+            proxyUrl: 'https://tjmhmjgbwkhrgfcrdokn.supabase.co/functions/v1/dynamic-worker', // 填写你实际的函数URL
+            thinkModel: 'deepseek-reasoner',
+            normalModel: 'deepseek-chat',
+        };
+
+        // ==================== 配置区域结束 ====================
+
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+        const supabase = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        // ---------- 全局状态 ----------
+        let currentUser = null;
+        let currentConversationId = null;
+        let conversations = [];
+        let deepThinkingEnabled = false;
+
+        // ---------- DOM 元素 ----------
+        const authEmail = document.getElementById('authEmail');
+        const authPassword = document.getElementById('authPassword');
+        const signUpBtn = document.getElementById('signUpBtn');
+        const signInBtn = document.getElementById('signInBtn');
+        const signOutBtn = document.getElementById('signOutBtn');
+        const userEmailSpan = document.getElementById('userEmail');
+        const authSectionDiv = document.getElementById('authSection');
+        const userSectionDiv = document.getElementById('userSection');
+        const conversationsListDiv = document.getElementById('conversationsList');
+        const newChatBtn = document.getElementById('newChatBtn');
+        const deepThinkCheckbox = document.getElementById('deepThinkCheckbox');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // ---------- 初始化鉴权状态 ----------
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (session?.user) {
+                currentUser = session.user;
+                userEmailSpan.textContent = currentUser.email;
+                authSectionDiv.style.display = 'none';
+                userSectionDiv.style.display = 'flex';
+                loadConversations();
+            } else {
+                currentUser = null;
+                currentConversationId = null;
+                conversations = [];
+                authSectionDiv.style.display = 'flex';
+                userSectionDiv.style.display = 'none';
+                conversationsListDiv.innerHTML = '';
+                messagesContainer.innerHTML = '<div class="empty-state">请先登录以开始对话</div>';
+            }
+        });
+
+        // 初始检查
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) {
+                currentUser = session.user;
+                userEmailSpan.textContent = currentUser.email;
+                authSectionDiv.style.display = 'none';
+                userSectionDiv.style.display = 'flex';
+                loadConversations();
+            }
+        });
+
+        // ---------- 鉴权事件 ----------
+        signUpBtn.addEventListener('click', async () => {
+            const email = authEmail.value.trim();
+            const password = authPassword.value;
+            if (!email || !password) return alert('请输入邮箱和密码');
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) alert('注册失败: ' + error.message);
+            else alert('注册成功，请查看邮箱确认（如果开启了邮箱验证）');
+        });
+
+        signInBtn.addEventListener('click', async () => {
+            const email = authEmail.value.trim();
+            const password = authPassword.value;
+            if (!email || !password) return alert('请输入邮箱和密码');
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) alert('登录失败: ' + error.message);
+        });
+
+        signOutBtn.addEventListener('click', async () => {
+            await supabase.auth.signOut();
+        });
+
+        // ---------- 会话管理 ----------
+        async function loadConversations() {
+            if (!currentUser) return;
+            const { data, error } = await supabase
+                .from('conversations')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('加载会话失败:', error);
+                return;
+            }
+            conversations = data || [];
+            renderConversationsList();
+            if (conversations.length > 0 && !currentConversationId) {
+                selectConversation(conversations[0].id);
+            }
+        }
+
+        function renderConversationsList() {
+            conversationsListDiv.innerHTML = '';
+            conversations.forEach(conv => {
+                const div = document.createElement('div');
+                div.className = `conversation-item ${conv.id === currentConversationId ? 'active' : ''}`;
+                div.innerHTML = `
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conv.title || '新对话'}</span>
+                    <button class="delete-btn" title="删除">🗑️</button>
+                `;
+                div.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) {
+                        deleteConversation(conv.id);
+                    } else {
+                        selectConversation(conv.id);
+                    }
+                });
+                conversationsListDiv.appendChild(div);
+            });
+        }
+
+        async function selectConversation(convId) {
+            currentConversationId = convId;
+            renderConversationsList();
+            messagesContainer.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+            const { data: messages, error } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', convId)
+                .order('created_at', { ascending: true });
+            if (error) {
+                console.error('加载消息失败:', error);
+                messagesContainer.innerHTML = '<div class="empty-state">加载消息失败</div>';
+                return;
+            }
+            renderMessages(messages || []);
+        }
+
+        function renderMessages(messages) {
+            messagesContainer.innerHTML = '';
+            if (messages.length === 0) {
+                messagesContainer.innerHTML = '<div class="empty-state">开始新的对话吧 ✨</div>';
+                return;
+            }
+            messages.forEach(msg => {
+                appendMessageToUI(msg.role, msg.content, msg.reasoning_content);
+            });
+            scrollToBottom();
+        }
+
+        function appendMessageToUI(role, content, reasoningContent = null) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+
+            let html = '';
+            if (role === 'assistant' && reasoningContent) {
+                html += `<span class="thinking-badge" onclick="this.nextElementSibling.classList.toggle('show')">💭 查看思考过程</span>`;
+                html += `<div class="reasoning-content">${escapeHtml(reasoningContent)}</div>`;
+            }
+            html += `<div>${escapeHtml(content)}</div>`;
+            div.innerHTML = html;
+            messagesContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        async function createNewConversation() {
+            if (!currentUser) return alert('请先登录');
+            const title = `新对话 ${new Date().toLocaleString()}`;
+            const { data, error } = await supabase
+                .from('conversations')
+                .insert({ user_id: currentUser.id, title })
+                .select()
+                .single();
+            if (error) {
+                console.error('创建会话失败:', error);
+                return;
+            }
+            conversations.unshift(data);
+            renderConversationsList();
+            selectConversation(data.id);
+        }
+
+        async function deleteConversation(convId) {
+            if (!confirm('确定删除此对话吗？')) return;
+            await supabase.from('messages').delete().eq('conversation_id', convId);
+            await supabase.from('conversations').delete().eq('id', convId);
+            conversations = conversations.filter(c => c.id !== convId);
+            if (currentConversationId === convId) {
+                currentConversationId = null;
+                messagesContainer.innerHTML = '<div class="empty-state">请选择一个对话</div>';
+            }
+            renderConversationsList();
+        }
+
+        newChatBtn.addEventListener('click', createNewConversation);
+
+        // ---------- 深度思考开关 ----------
+        deepThinkCheckbox.addEventListener('change', (e) => {
+            deepThinkingEnabled = e.target.checked;
+        });
+
+        // ---------- 发送消息 ----------
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content) return;
+            if (!currentUser) return alert('请先登录');
+            if (!currentConversationId) await createNewConversation();
+            if (!currentConversationId) return;
+
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // 显示用户消息
+            appendMessageToUI('user', content);
+
+            // 保存用户消息到 Supabase
+            const { error: userMsgError } = await supabase.from('messages').insert({
+                conversation_id: currentConversationId,
+                role: 'user',
+                content,
+                user_id: currentUser.id,
+            });
+            if (userMsgError) console.error('保存用户消息失败:', userMsgError);
+
+            // 显示加载状态
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message assistant';
+            loadingDiv.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+            messagesContainer.appendChild(loadingDiv);
+            scrollToBottom();
+
+            try {
+                const assistantResponse = await callDeepSeekAPI(content);
+                // 移除加载状态
+                loadingDiv.remove();
+
+                // 显示助手消息（包含可能的思考过程）
+                appendMessageToUI('assistant', assistantResponse.content, assistantResponse.reasoning_content);
+
+                // 保存助手消息
+                await supabase.from('messages').insert({
+                    conversation_id: currentConversationId,
+                    role: 'assistant',
+                    content: assistantResponse.content,
+                    reasoning_content: assistantResponse.reasoning_content || null,
+                    user_id: currentUser.id,
+                });
+
+                // 更新会话标题（使用首条用户消息前20个字）
+                const { data: convData } = await supabase
+                    .from('conversations')
+                    .select('title')
+                    .eq('id', currentConversationId)
+                    .single();
+                if (convData && (!convData.title || convData.title.startsWith('新对话'))) {
+                    const newTitle = content.slice(0, 20) + (content.length > 20 ? '...' : '');
+                    await supabase.from('conversations').update({ title: newTitle }).eq('id', currentConversationId);
+                    loadConversations();
+                }
+            } catch (error) {
+                loadingDiv.remove();
+                alert('调用 DeepSeek API 失败: ' + error.message);
+            }
+        }
+
+        // ---------- DeepSeek API 调用（支持深度思考/流式） ----------
+        async function callDeepSeekAPI(userMessage) {
+            // 获取历史消息上下文（最近10条）
+            const { data: historyMessages } = await supabase
+                .from('messages')
+                .select('role, content')
+                .eq('conversation_id', currentConversationId)
+                .order('created_at', { ascending: true })
+                .limit(10);
+
+            const messages = [
+                { role: 'system', content: '你是一个有帮助的AI助手。' },
+                ...(historyMessages || []).map(m => ({ role: m.role, content: m.content })),
+                { role: 'user', content: userMessage },
+            ];
+
+            const model = deepThinkingEnabled ? DEEPSEEK_CONFIG.thinkModel : DEEPSEEK_CONFIG.normalModel;
+            const requestBody = {
+                model,
+                messages,
+                stream: true, // 开启流式以支持深度思考过程
+            };
+
+            // 如果启用深度思考，可通过 thinking 参数指定（适用于 deepseek-chat 模型）
+            if (deepThinkingEnabled && model === DEEPSEEK_CONFIG.normalModel) {
+                requestBody.thinking = { type: 'enabled' };
+            }
+
+            // 说明：此处直接在前端调用 DeepSeek API，生产环境应使用 Supabase Edge Functions 代理
+            // 示例代理端点（需你自行部署）：
+            // const proxyUrl = 'https://your-project.supabase.co/functions/v1/deepseek-proxy';
+            // 详细文档：https://supabase.com/docs/guides/functions
+            const response = await fetch(DEEPSEEK_CONFIG.proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 不需要 Authorization 头了，Edge Function 会自己加上
+                    'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`, 
+                },
+                body: JSON.stringify(requestBody),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API 请求失败: ${response.status} ${errorText}`);
+            }
+
+            // 处理流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullContent = '';
+            let reasoningContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.slice(6);
+                        if (dataStr === '[DONE]') continue;
+
+                        try {
+                            const data = JSON.parse(dataStr);
+                            const delta = data.choices?.[0]?.delta;
+                            if (delta?.content) {
+                                fullContent += delta.content;
+                            }
+                            // 深度思考模式下的推理内容
+                            if (delta?.reasoning_content) {
+                                reasoningContent += delta.reasoning_content;
+                            }
+                        } catch (e) {
+                            // 忽略解析错误
+                        }
+                    }
+                }
+            }
+
+            return {
+                content: fullContent,
+                reasoning_content: reasoningContent || null,
+            };
+        }
+    </script>
+
+    <!-- ==================== UI 结构 ==================== -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>🤖 DeepSeek Chat</h2>
+            <div id="authSection" class="auth-section">
+                <div class="auth-input-group">
+                    <input type="email" id="authEmail" placeholder="邮箱" />
+                    <input type="password" id="authPassword" placeholder="密码" />
+                </div>
+                <div class="auth-buttons">
+                    <button class="btn btn-primary" id="signUpBtn">注册</button>
+                    <button class="btn btn-outline" id="signInBtn">登录</button>
+                </div>
+            </div>
+            <div id="userSection" class="user-info" style="display:none;">
+                <span id="userEmail"></span>
+                <button class="btn btn-outline" id="signOutBtn">退出</button>
+            </div>
+        </div>
+        <div class="new-chat-btn" id="newChatBtn">
+            ➕ 新建对话
+        </div>
+        <div class="conversations-list" id="conversationsList">
+            <div style="color:var(--text-light);text-align:center;padding:2rem;">暂无对话</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="chat-header">
+            <span style="font-weight:600;">AI 对话</span>
+            <label class="deep-think-toggle">
+                <span>🧠 深度思考</span>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="deepThinkCheckbox">
+                    <span class="toggle-slider"></span>
+                </div>
+            </label>
+        </div>
+        <div class="messages-container" id="messagesContainer">
+            <div class="empty-state">请先登录以开始对话</div>
+        </div>
+        <div class="input-area">
+            <textarea id="messageInput" placeholder="输入消息... (Enter 发送，Shift+Enter 换行)" rows="1"></textarea>
+            <button class="btn btn-primary" id="sendBtn">发送</button>
+        </div>
+    </div>
+
+</body>
+</html>
