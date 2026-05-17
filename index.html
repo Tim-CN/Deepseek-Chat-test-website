@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>智语AI - 智能对话</title>
+    <title>智语AI - 智能对话 · 支持个人API密钥</title>
     <style>
         * {
             margin: 0;
@@ -128,6 +128,33 @@
             padding: 0.5rem 0.8rem;
             border-radius: 2rem;
             font-size: 0.8rem;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 0;
+        }
+        .user-email {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .api-key-badge {
+            background: #e2e8f0;
+            border-radius: 1rem;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #334155;
+        }
+        .api-key-badge.active {
+            background: #d9f99d;
+            color: #3f6212;
         }
         .logout-btn {
             background: none;
@@ -136,6 +163,7 @@
             cursor: pointer;
             font-size: 0.75rem;
             font-weight: 500;
+            padding: 0.2rem 0.4rem;
         }
         .new-chat {
             margin: 1rem;
@@ -400,7 +428,63 @@
             background: rgba(0,0,0,0.3);
             z-index: 15;
         }
-        /* 移动端 */
+        /* Modal for API key */
+        .modal-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1100;
+            visibility: hidden;
+            opacity: 0;
+            transition: 0.2s;
+        }
+        .modal-mask.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-container {
+            background: white;
+            width: 90%;
+            max-width: 420px;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.3);
+        }
+        .modal-container h3 {
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+        .modal-container input {
+            width: 100%;
+            padding: 0.7rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 1rem;
+            margin: 0.5rem 0 1rem;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.8rem;
+        }
+        .modal-buttons button {
+            padding: 0.4rem 1rem;
+            border-radius: 2rem;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-secondary {
+            background: #e2e8f0;
+        }
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed;
@@ -435,15 +519,23 @@
     <div id="root" class="init-loading">加载中，请稍候...</div>
     <div id="errorToast" class="error-toast"></div>
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
+    <div id="apiKeyModal" class="modal-mask">
+        <div class="modal-container">
+            <h3>🔑 设置 DeepSeek API Key</h3>
+            <p style="font-size:0.8rem; color:#475569;">使用自己的密钥将直接调用官方接口（更稳定）</p>
+            <input type="password" id="apiKeyInput" placeholder="sk-xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+            <div class="modal-buttons">
+                <button id="saveApiKeyBtn" class="btn-primary">保存</button>
+                <button id="clearApiKeyBtn" style="background:#fee2e2; color:#b91c1c;">清除密钥</button>
+                <button id="closeApiKeyModal" class="btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js">
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js">
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js">
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js">
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 
     <script>
@@ -454,9 +546,8 @@
             const DEEPSEEK_PROXY = 'https://tjmhmjgbwkhrgfcrdokn.supabase.co/functions/v1/dynamic-worker';
             const MODEL_MAP = { 'v4': 'deepseek-reasoner', 'v3': 'deepseek-chat' };
             const MAX_MESSAGE_LENGTH = 4000;
-            const CONTEXT_LIMIT = 20; // 上下文消息数量
+            const CONTEXT_LIMIT = 20;
 
-            // ---------- 文本常量 ----------
             const TEXT = {
                 NEW_CHAT_TITLE: '新对话',
                 LOADING: '加载对话中...',
@@ -474,19 +565,16 @@
                 LOAD_CONV_FAILED: '加载对话列表失败',
                 LOAD_MSG_FAILED: '加载消息失败',
                 SEND_FAILED: '发送失败，请重试',
-                THINKING: '💭 深度思考中...',
                 THINK_BADGE: '💭 查看思考过程',
             };
 
             if (!window.supabase || !window.marked || !window.hljs || !window.DOMPurify) {
-                document.getElementById('root').innerHTML =
-                    '<div style="text-align:center;margin-top:50px;color:red;">依赖库加载失败，请检查网络后刷新页面</div>';
+                document.getElementById('root').innerHTML = '<div style="text-align:center;margin-top:50px;color:red;">依赖库加载失败，请刷新页面</div>';
                 return;
             }
 
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-            // ---------- 简易状态存储 ----------
             const store = {
                 _state: {
                     currentUser: null,
@@ -496,29 +584,25 @@
                     selectedModel: localStorage.getItem('model') || 'v4',
                     isLoading: false,
                     layoutBuilt: false,
+                    customApiKey: null,     // 存储用户自己的deepseek key
                 },
                 get(key) { return this._state[key]; },
                 set(key, value) {
                     this._state[key] = value;
                     if (key === 'deepThink') localStorage.setItem('deepThink', value);
                     if (key === 'selectedModel') localStorage.setItem('model', value);
+                    if (key === 'customApiKey') {
+                        // 仅内存存储，每次刷新从数据库加载
+                    }
                 },
             };
 
-            // ---------- DOM 引用缓存 ----------
-            let convListContainer = null;
-            let messagesContainer = null;
-            let chatInput = null;
-            let sendBtn = null;
-            let modelSelect = null;
-            let deepCheck = null;
-            let logoutBtn = null;
-            let newChatBtn = null;
-            let hamburgerBtn = null;
-            let sidebarEl = null;
-            let sidebarOverlay = null;
+            let convListContainer = null, messagesContainer = null, chatInput = null, sendBtn = null;
+            let modelSelect = null, deepCheck = null, logoutBtn = null, newChatBtn = null;
+            let hamburgerBtn = null, sidebarEl = null, sidebarOverlay = null;
+            let apiKeyBadge = null, apiKeyModal = null, apiKeyInput = null;
 
-            // ---------- 工具函数 ----------
+            // 工具函数
             function showErrorToast(message) {
                 const toast = document.getElementById('errorToast');
                 if (!toast) return;
@@ -541,16 +625,13 @@
                     breaks: true,
                     gfm: true,
                     highlight: function(code, lang) {
-                        if (lang && hljs.getLanguage(lang)) {
-                            return hljs.highlight(code, { language: lang }).value;
-                        }
+                        if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
                         return hljs.highlightAuto(code).value;
                     }
                 });
                 return DOMPurify.sanitize(marked.parse(text));
             }
 
-            // 封装数据库操作，统一错误处理
             async function dbQuery(queryFn, errorMsg = '操作失败') {
                 const { data, error } = await queryFn();
                 if (error) {
@@ -559,6 +640,63 @@
                     return null;
                 }
                 return data;
+            }
+
+            // ---------- API Key 管理 (表 user_configs) ----------
+            async function loadCustomApiKey() {
+                const user = store.get('currentUser');
+                if (!user) return null;
+                const data = await dbQuery(
+                    () => supabase.from('user_configs').select('key_value').eq('user_id', user.id).eq('key_name', 'deepseek_api_key').maybeSingle(),
+                    '加载API密钥失败'
+                );
+                const key = data?.key_value || null;
+                store.set('customApiKey', key);
+                updateApiKeyBadgeUI();
+                return key;
+            }
+
+            async function saveCustomApiKey(apiKey) {
+                const user = store.get('currentUser');
+                if (!user) return false;
+                const trimmed = apiKey?.trim();
+                if (!trimmed) return await clearCustomApiKey();
+                const { error } = await supabase.from('user_configs').upsert({
+                    user_id: user.id,
+                    key_name: 'deepseek_api_key',
+                    key_value: trimmed,
+                    updated_at: new Date()
+                }, { onConflict: 'user_id, key_name' });
+                if (error) {
+                    showErrorToast('保存密钥失败: ' + error.message);
+                    return false;
+                }
+                store.set('customApiKey', trimmed);
+                updateApiKeyBadgeUI();
+                showErrorToast('✅ API密钥已保存，后续对话将使用您自己的密钥');
+                return true;
+            }
+
+            async function clearCustomApiKey() {
+                const user = store.get('currentUser');
+                if (!user) return false;
+                const { error } = await supabase.from('user_configs').delete().eq('user_id', user.id).eq('key_name', 'deepseek_api_key');
+                if (error) {
+                    showErrorToast('清除失败: ' + error.message);
+                    return false;
+                }
+                store.set('customApiKey', null);
+                updateApiKeyBadgeUI();
+                showErrorToast('已清除个人API密钥，将使用默认代理');
+                return true;
+            }
+
+            function updateApiKeyBadgeUI() {
+                if (!apiKeyBadge) return;
+                const hasKey = !!store.get('customApiKey');
+                apiKeyBadge.textContent = hasKey ? '🔑 已设密钥' : '🔌 未设密钥';
+                if (hasKey) apiKeyBadge.classList.add('active');
+                else apiKeyBadge.classList.remove('active');
             }
 
             // ---------- 认证界面 ----------
@@ -570,7 +708,7 @@
                     <div class="auth-container">
                         <div class="auth-card">
                             <h1>✨ 智语AI</h1>
-                            <p>登录体验智能对话</p>
+                            <p>登录体验智能对话 · 支持个人API密钥</p>
                             <div id="loginPanel">
                                 <input type="email" id="loginEmail" class="auth-input" placeholder="邮箱" autocomplete="email">
                                 <input type="password" id="loginPassword" class="auth-input" placeholder="密码" minlength="6">
@@ -605,11 +743,7 @@
                     if (pwd.length < 6) return showErrorToast('密码至少需要6位');
                     const { error } = await supabase.auth.signUp({ email, password: pwd });
                     if (error) showErrorToast(error.message);
-                    else {
-                        alert('注册成功，请登录');
-                        document.getElementById('signupPanel').style.display = 'none';
-                        document.getElementById('loginPanel').style.display = 'block';
-                    }
+                    else { alert('注册成功，请登录'); document.getElementById('signupPanel').style.display = 'none'; document.getElementById('loginPanel').style.display = 'block'; }
                 });
                 document.getElementById('toLogin')?.addEventListener('click', () => {
                     document.getElementById('signupPanel').style.display = 'none';
@@ -617,15 +751,11 @@
                 });
             }
 
-            // ---------- 数据加载 ----------
+            // ---------- 数据加载, 对话管理 ----------
             async function loadConversations() {
                 const user = store.get('currentUser');
                 if (!user) return [];
-                const data = await dbQuery(
-                    () => supabase.from('conversations').select('*').eq('user_id', user.id).order(
-                        'updated_at', { ascending: false }),
-                    TEXT.LOAD_CONV_FAILED
-                );
+                const data = await dbQuery(() => supabase.from('conversations').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }), TEXT.LOAD_CONV_FAILED);
                 if (data) store.set('conversations', data);
                 return data || [];
             }
@@ -634,23 +764,14 @@
                 if (!convListContainer) return;
                 const conversations = store.get('conversations');
                 const currentConvId = store.get('currentConvId');
-                if (!conversations.length) {
-                    convListContainer.innerHTML =
-                        '<div style="padding:1rem;text-align:center;color:#94a3b8;">暂无对话</div>';
-                    return;
-                }
+                if (!conversations.length) { convListContainer.innerHTML = '<div style="padding:1rem;text-align:center;color:#94a3b8;">暂无对话</div>'; return; }
                 convListContainer.innerHTML = '';
                 conversations.forEach(conv => {
                     const div = document.createElement('div');
                     div.className = `conv-item ${conv.id === currentConvId ? 'active' : ''}`;
-                    div.innerHTML =
-                        `<span class="conv-title">${escapeHtml(conv.title || TEXT.NEW_CHAT_TITLE)}</span><button class="del-conv" data-id="${conv.id}" aria-label="删除对话">🗑️</button>`;
-                    div.querySelector('.conv-title').addEventListener('click', () => selectConversation(conv
-                        .id));
-                    div.querySelector('.del-conv').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteConversation(conv.id);
-                    });
+                    div.innerHTML = `<span class="conv-title">${escapeHtml(conv.title || TEXT.NEW_CHAT_TITLE)}</span><button class="del-conv" data-id="${conv.id}" aria-label="删除对话">🗑️</button>`;
+                    div.querySelector('.conv-title').addEventListener('click', () => selectConversation(conv.id));
+                    div.querySelector('.del-conv').addEventListener('click', (e) => { e.stopPropagation(); deleteConversation(conv.id); });
                     convListContainer.appendChild(div);
                 });
             }
@@ -660,16 +781,9 @@
                 store.set('currentConvId', id);
                 renderConvList();
                 if (!messagesContainer) return;
-                const msgs = await dbQuery(
-                    () => supabase.from('messages').select('*').eq('conversation_id', id).order('created_at', {
-                        ascending: true }),
-                    TEXT.LOAD_MSG_FAILED
-                );
+                const msgs = await dbQuery(() => supabase.from('messages').select('*').eq('conversation_id', id).order('created_at', { ascending: true }), TEXT.LOAD_MSG_FAILED);
                 messagesContainer.innerHTML = '';
-                if (!msgs || !msgs.length) {
-                    messagesContainer.innerHTML = `<div class="empty-state">${TEXT.EMPTY_CHAT}</div>`;
-                    return;
-                }
+                if (!msgs || !msgs.length) { messagesContainer.innerHTML = `<div class="empty-state">${TEXT.EMPTY_CHAT}</div>`; return; }
                 msgs.forEach(msg => appendMessageToUI(msg.role, msg.content, msg.reasoning_content));
             }
 
@@ -679,11 +793,7 @@
                 await dbQuery(() => supabase.from('conversations').delete().eq('id', id), '删除对话失败');
                 const conversations = store.get('conversations').filter(c => c.id !== id);
                 store.set('conversations', conversations);
-                if (store.get('currentConvId') === id) {
-                    store.set('currentConvId', null);
-                    if (messagesContainer) messagesContainer.innerHTML =
-                        `<div class="empty-state">${TEXT.SELECT_OR_NEW}</div>`;
-                }
+                if (store.get('currentConvId') === id) { store.set('currentConvId', null); if (messagesContainer) messagesContainer.innerHTML = `<div class="empty-state">${TEXT.SELECT_OR_NEW}</div>`; }
                 renderConvList();
             }
 
@@ -691,18 +801,14 @@
                 const user = store.get('currentUser');
                 if (!user) return null;
                 const title = `${TEXT.NEW_CHAT_TITLE} ${new Date().toLocaleString()}`;
-                const data = await dbQuery(
-                    () => supabase.from('conversations').insert({ user_id: user.id, title }).select().single(),
-                    TEXT.CREATE_CONV_FAILED
-                );
+                const data = await dbQuery(() => supabase.from('conversations').insert({ user_id: user.id, title }).select().single(), TEXT.CREATE_CONV_FAILED);
                 if (!data) return null;
                 const conversations = store.get('conversations');
                 conversations.unshift(data);
                 store.set('conversations', conversations);
                 store.set('currentConvId', data.id);
                 renderConvList();
-                if (messagesContainer) messagesContainer.innerHTML =
-                    `<div class="empty-state">${TEXT.NEW_CHAT_PLACEHOLDER}</div>`;
+                if (messagesContainer) messagesContainer.innerHTML = `<div class="empty-state">${TEXT.NEW_CHAT_PLACEHOLDER}</div>`;
                 return data;
             }
 
@@ -722,189 +828,66 @@
                     msgDiv.appendChild(reasoningDiv);
                 }
                 const contentDiv = document.createElement('div');
-                if (role === 'user') {
-                    contentDiv.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
-                } else {
-                    contentDiv.innerHTML = renderMarkdown(content);
-                    contentDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-                }
+                if (role === 'user') contentDiv.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+                else { contentDiv.innerHTML = renderMarkdown(content); contentDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block)); }
                 msgDiv.appendChild(contentDiv);
                 messagesContainer.appendChild(msgDiv);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 return msgDiv;
             }
 
-            // 刷新聊天UI数据
-            async function refreshChatData() {
-                const user = store.get('currentUser');
-                if (!user) return;
-                await loadConversations();
-                renderConvList();
-                const currentConvId = store.get('currentConvId');
-                if (currentConvId) {
-                    await selectConversation(currentConvId);
-                } else if (store.get('conversations').length > 0) {
-                    await selectConversation(store.get('conversations')[0].id);
+            // 通用流式调用 (支持自定义key直接调用官方API 或 默认代理)
+            async function streamDeepseekRequest(reqBody, useCustomKey, apiKey) {
+                if (useCustomKey && apiKey) {
+                    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({ ...reqBody, stream: true })
+                    });
+                    if (!resp.ok) throw new Error(`DeepSeek API ${resp.status}: ${await resp.text()}`);
+                    return resp.body.getReader();
                 } else {
-                    if (messagesContainer) messagesContainer.innerHTML =
-                        `<div class="empty-state">✨ 点击新建对话开始聊天</div>`;
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const accessToken = sessionData?.session?.access_token || SUPABASE_ANON;
+                    const resp = await fetch(DEEPSEEK_PROXY, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                        body: JSON.stringify(reqBody)
+                    });
+                    if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
+                    return resp.body.getReader();
                 }
             }
 
-            // ---------- 构建主布局（仅一次） ----------
-            function buildChatLayout() {
-                const user = store.get('currentUser');
-                const selectedModel = store.get('selectedModel');
-                const deepThink = store.get('deepThink');
-                document.getElementById('root').innerHTML = `
-                    <div class="app">
-                        <div class="sidebar" id="sidebarEl">
-                            <div class="sidebar-header">
-                                <h2>✨ 智语AI</h2>
-                                <div class="user-row">
-                                    <span id="userEmailSpan">${escapeHtml(user.email)}</span>
-                                    <button id="logoutBtn" class="logout-btn">退出</button>
-                                </div>
-                            </div>
-                            <button id="newChatBtn" class="new-chat">➕ 新建对话</button>
-                            <div class="conv-list" id="convList"></div>
-                        </div>
-                        <div class="main">
-                            <div class="chat-header">
-                                <button class="hamburger" id="hamburgerBtn" aria-label="菜单">☰</button>
-                                <select id="modelSelect" class="model-select">
-                                    <option value="v4" ${selectedModel==='v4'?'selected':''}>DeepSeek V4 (深度推理)</option>
-                                    <option value="v3" ${selectedModel==='v3'?'selected':''}>DeepSeek V3.2 (高速对话)</option>
-                                </select>
-                                <label class="think-toggle">
-                                    <span>🧠 深度思考</span>
-                                    <div class="switch">
-                                        <input type="checkbox" id="deepCheck" ${deepThink?'checked':''}>
-                                        <span class="slider"></span>
-                                    </div>
-                                </label>
-                            </div>
-                            <div class="messages" id="messagesContainer">
-                                <div class="empty-state">${TEXT.LOADING}</div>
-                            </div>
-                            <div class="input-area">
-                                <textarea id="chatInput" rows="1" placeholder="输入消息... (Enter 发送，Shift+Enter 换行)" maxlength="${MAX_MESSAGE_LENGTH}"></textarea>
-                                <button id="sendBtn" class="send-btn">发送</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                // 缓存DOM引用
-                convListContainer = document.getElementById('convList');
-                messagesContainer = document.getElementById('messagesContainer');
-                chatInput = document.getElementById('chatInput');
-                sendBtn = document.getElementById('sendBtn');
-                modelSelect = document.getElementById('modelSelect');
-                deepCheck = document.getElementById('deepCheck');
-                logoutBtn = document.getElementById('logoutBtn');
-                newChatBtn = document.getElementById('newChatBtn');
-                hamburgerBtn = document.getElementById('hamburgerBtn');
-                sidebarEl = document.getElementById('sidebarEl');
-                sidebarOverlay = document.getElementById('sidebarOverlay');
-                document.getElementById('userEmailSpan').textContent = user.email;
-
-                // 事件绑定
-                logoutBtn.addEventListener('click', async () => { await supabase.auth.signOut(); });
-                newChatBtn.addEventListener('click', async () => { await createNewConversation(); });
-                modelSelect.addEventListener('change', (e) => store.set('selectedModel', e.target.value));
-                deepCheck.addEventListener('change', (e) => store.set('deepThink', e.target.checked));
-                sendBtn.addEventListener('click', sendMessage);
-                chatInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                    }
-                });
-                chatInput.addEventListener('input', function() {
-                    this.style.height = 'auto';
-                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-                });
-                // 移动端菜单
-                hamburgerBtn.addEventListener('click', () => {
-                    sidebarEl.classList.toggle('open');
-                    sidebarOverlay.classList.toggle('active');
-                });
-                sidebarOverlay.addEventListener('click', () => {
-                    sidebarEl.classList.remove('open');
-                    sidebarOverlay.classList.remove('active');
-                });
-                // 点击对话项后自动关闭侧边栏（移动端）
-                convListContainer.addEventListener('click', (e) => {
-                    if (e.target.closest('.conv-title') && window.innerWidth <= 768) {
-                        sidebarEl.classList.remove('open');
-                        sidebarOverlay.classList.remove('active');
-                    }
-                });
-
-                store.set('layoutBuilt', true);
-            }
-
-            // ---------- 发送消息（流式渲染优化） ----------
+            // 发送消息 (支持个人key)
             async function sendMessage() {
                 if (store.get('isLoading')) return;
                 if (!chatInput) return;
                 const content = chatInput.value.trim();
                 if (!content) return;
-                if (content.length > MAX_MESSAGE_LENGTH) {
-                    showErrorToast(`消息过长，最多${MAX_MESSAGE_LENGTH}个字符`);
-                    return;
-                }
+                if (content.length > MAX_MESSAGE_LENGTH) { showErrorToast(`消息过长，最多${MAX_MESSAGE_LENGTH}个字符`); return; }
                 if (!store.get('currentConvId')) {
                     const newConv = await createNewConversation();
-                    if (!newConv) {
-                        showErrorToast(TEXT.CREATE_CONV_FAILED + '，无法发送');
-                        return;
-                    }
+                    if (!newConv) { showErrorToast(TEXT.CREATE_CONV_FAILED + '，无法发送'); return; }
                 }
                 const convId = store.get('currentConvId');
                 if (!convId) return;
 
-                // 保存用户消息
-                const insertResult = await dbQuery(
-                    () => supabase.from('messages').insert({
-                        conversation_id: convId,
-                        role: 'user',
-                        content,
-                        user_id: store.get('currentUser').id
-                    }),
-                    TEXT.SAVE_FAILED
-                );
-                if (!insertResult && insertResult !== null) return; // 严格检查：null表示出错
+                await dbQuery(() => supabase.from('messages').insert({ conversation_id: convId, role: 'user', content, user_id: store.get('currentUser').id }), TEXT.SAVE_FAILED);
                 appendMessageToUI('user', content);
-                chatInput.value = '';
-                chatInput.style.height = 'auto';
+                chatInput.value = ''; chatInput.style.height = 'auto';
 
-                // 获取历史上下文
-                const history = await dbQuery(
-                    () => supabase.from('messages').select('role, content').eq('conversation_id', convId).order(
-                        'created_at', { ascending: true }).limit(CONTEXT_LIMIT),
-                    TEXT.LOAD_MSG_FAILED
-                );
-                const messagesPayload = [
-                    { role: 'system', content: '你是智语AI助手，乐于助人，回答准确。' },
-                    ...(history || []).map(m => ({ role: m.role, content: m.content })),
-                    { role: 'user', content }
-                ];
-
+                const history = await dbQuery(() => supabase.from('messages').select('role, content').eq('conversation_id', convId).order('created_at', { ascending: true }).limit(CONTEXT_LIMIT), TEXT.LOAD_MSG_FAILED);
+                const messagesPayload = [{ role: 'system', content: '你是智语AI助手，乐于助人，回答准确。' }, ...(history || []).map(m => ({ role: m.role, content: m.content })), { role: 'user', content }];
                 const modelReal = MODEL_MAP[store.get('selectedModel')] || 'deepseek-chat';
-                const reqBody = {
-                    model: modelReal,
-                    messages: messagesPayload,
-                    stream: true
-                };
-                if (store.get('deepThink') && modelReal === 'deepseek-chat') {
-                    reqBody.thinking = { type: 'enabled' };
-                }
+                const reqBody = { model: modelReal, messages: messagesPayload, stream: true };
+                if (store.get('deepThink') && modelReal === 'deepseek-chat') reqBody.thinking = { type: 'enabled' };
+
+                const customKey = store.get('customApiKey');
+                const useOwnKey = !!customKey;
 
                 store.set('isLoading', true);
                 sendBtn.disabled = true;
-
-                // 助手消息占位（含加载动画）
                 const assistantDiv = document.createElement('div');
                 assistantDiv.className = 'message assistant';
                 const typingDiv = document.createElement('div');
@@ -914,59 +897,37 @@
                 messagesContainer.appendChild(assistantDiv);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-                let contentDiv = null;
-                let thinkBadge = null;
-                let reasoningDiv = null;
-                let fullContent = '';
-                let fullReasoning = '';
-                let pendingUpdate = false;
+                let contentDiv = null, thinkBadge = null, reasoningDiv = null;
+                let fullContent = '', fullReasoning = '';
                 let updateScheduled = false;
-
-                function scheduleDOMUpdate() {
+                const scheduleDOMUpdate = () => {
                     if (!updateScheduled) {
                         updateScheduled = true;
                         requestAnimationFrame(() => {
-                            if (fullReasoning && reasoningDiv) {
-                                reasoningDiv.innerHTML = renderMarkdown(fullReasoning);
-                            }
-                            if (fullContent && contentDiv) {
-                                contentDiv.innerHTML = renderMarkdown(fullContent);
-                                contentDiv.querySelectorAll('pre code').forEach(block => hljs
-                                    .highlightElement(block));
-                            }
+                            if (fullReasoning && reasoningDiv) reasoningDiv.innerHTML = renderMarkdown(fullReasoning);
+                            if (fullContent && contentDiv) { contentDiv.innerHTML = renderMarkdown(fullContent); contentDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block)); }
                             messagesContainer.scrollTop = messagesContainer.scrollHeight;
                             updateScheduled = false;
                         });
                     }
-                }
+                };
 
                 try {
-                    // 使用用户access_token进行鉴权
-                    const { data: sessionData } = await supabase.auth.getSession();
-                    const accessToken = sessionData?.session?.access_token || SUPABASE_ANON;
-                    const resp = await fetch(DEEPSEEK_PROXY, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify(reqBody)
-                    });
-                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                    const reader = resp.body.getReader();
+                    const reader = await streamDeepseekRequest(reqBody, useOwnKey, customKey);
                     const decoder = new TextDecoder();
-                    // 移除加载动画
                     if (typingDiv.parentNode) typingDiv.remove();
                     contentDiv = document.createElement('div');
                     assistantDiv.appendChild(contentDiv);
-
+                    let buffer = '';
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-                        const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
-                        for (let line of lines) {
-                            const dataStr = line.slice(6);
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        for (const line of lines) {
+                            if (!line.startsWith('data:')) continue;
+                            const dataStr = line.slice(5).trim();
                             if (dataStr === '[DONE]') continue;
                             try {
                                 const json = JSON.parse(dataStr);
@@ -979,48 +940,27 @@
                                         thinkBadge.textContent = TEXT.THINK_BADGE;
                                         reasoningDiv = document.createElement('div');
                                         reasoningDiv.className = 'reasoning';
-                                        thinkBadge.addEventListener('click', () => reasoningDiv.classList.toggle(
-                                            'show'));
+                                        thinkBadge.addEventListener('click', () => reasoningDiv.classList.toggle('show'));
                                         assistantDiv.insertBefore(thinkBadge, contentDiv);
                                         assistantDiv.insertBefore(reasoningDiv, contentDiv);
                                     }
                                     scheduleDOMUpdate();
                                 }
-                                if (delta?.content) {
-                                    fullContent += delta.content;
-                                    scheduleDOMUpdate();
-                                }
-                            } catch (e) { /* 忽略解析错误 */ }
+                                if (delta?.content) { fullContent += delta.content; scheduleDOMUpdate(); }
+                            } catch (e) {}
                         }
                     }
-                    // 流结束，保存助手消息
-                    await dbQuery(
-                        () => supabase.from('messages').insert({
-                            conversation_id: convId,
-                            role: 'assistant',
-                            content: fullContent,
-                            reasoning_content: fullReasoning || null,
-                            user_id: store.get('currentUser').id
-                        }),
-                        TEXT.SAVE_FAILED
-                    );
-                    // 更新对话标题
-                    const convCheck = await dbQuery(
-                        () => supabase.from('conversations').select('title').eq('id', convId).single()
-                    );
+                    await dbQuery(() => supabase.from('messages').insert({ conversation_id: convId, role: 'assistant', content: fullContent, reasoning_content: fullReasoning || null, user_id: store.get('currentUser').id }), TEXT.SAVE_FAILED);
+                    const convCheck = await dbQuery(() => supabase.from('conversations').select('title').eq('id', convId).single());
                     if (convCheck && convCheck.title.startsWith(TEXT.NEW_CHAT_TITLE)) {
                         const newTitle = content.slice(0, 20) + (content.length > 20 ? '...' : '');
-                        await dbQuery(
-                            () => supabase.from('conversations').update({ title: newTitle }).eq('id', convId)
-                        );
-                        await loadConversations();
-                        renderConvList();
+                        await dbQuery(() => supabase.from('conversations').update({ title: newTitle }).eq('id', convId));
+                        await loadConversations(); renderConvList();
                     }
                 } catch (err) {
-                    showErrorToast(TEXT.NETWORK_ERROR);
+                    showErrorToast(useOwnKey ? '使用个人密钥请求失败，请检查Key有效性' : TEXT.NETWORK_ERROR);
                     if (typingDiv.parentNode) typingDiv.remove();
-                    const errorDiv = document.createElement('div');
-                    errorDiv.textContent = '❌ ' + (err.message || TEXT.SEND_FAILED);
+                    const errorDiv = document.createElement('div'); errorDiv.textContent = '❌ ' + (err.message || TEXT.SEND_FAILED);
                     assistantDiv.appendChild(errorDiv);
                 } finally {
                     store.set('isLoading', false);
@@ -1029,53 +969,78 @@
                 }
             }
 
-            // ---------- 认证状态监听 ----------
-            let authProcessing = false;
-            let pendingAuthRefresh = false;
-
-            async function checkSession() {
-                if (authProcessing) return;
-                authProcessing = true;
-                try {
-                    const { data, error } = await supabase.auth.getSession();
-                    if (error || !data?.session) {
-                        if (store.get('currentUser') !== null) store.set('layoutBuilt', false);
-                        store.set('currentUser', null);
-                        showLogin();
-                        authProcessing = false;
-                        return;
-                    }
-                    const newUser = data.session.user;
-                    const currentUser = store.get('currentUser');
-                    if (currentUser && currentUser.id === newUser.id && store.get('layoutBuilt')) {
-                        store.set('currentUser', newUser);
-                        await refreshChatData();
-                        authProcessing = false;
-                        return;
-                    }
-                    store.set('currentUser', newUser);
-                    if (!store.get('layoutBuilt')) {
-                        buildChatLayout();
-                    }
-                    await refreshChatData();
-                } catch (err) {
-                    console.error(err);
-                    showErrorToast('认证异常');
-                } finally {
-                    authProcessing = false;
-                }
+            async function refreshChatData() {
+                const user = store.get('currentUser');
+                if (!user) return;
+                await loadConversations(); renderConvList();
+                const currentConvId = store.get('currentConvId');
+                if (currentConvId) await selectConversation(currentConvId);
+                else if (store.get('conversations').length > 0) await selectConversation(store.get('conversations')[0].id);
+                else if (messagesContainer) messagesContainer.innerHTML = `<div class="empty-state">✨ 点击新建对话开始聊天</div>`;
             }
 
-            supabase.auth.onAuthStateChange(() => {
-                if (pendingAuthRefresh) return;
-                pendingAuthRefresh = true;
-                setTimeout(() => {
-                    pendingAuthRefresh = false;
-                    checkSession();
-                }, 100);
-            });
+            function buildChatLayout() {
+                const user = store.get('currentUser');
+                document.getElementById('root').innerHTML = `
+                    <div class="app">
+                        <div class="sidebar" id="sidebarEl">
+                            <div class="sidebar-header">
+                                <h2>✨ 智语AI</h2>
+                                <div class="user-row">
+                                    <div class="user-info"><span class="user-email">${escapeHtml(user.email)}</span><span id="apiKeyBadge" class="api-key-badge">🔌 未设密钥</span></div>
+                                    <button id="logoutBtn" class="logout-btn">退出</button>
+                                </div>
+                            </div>
+                            <button id="newChatBtn" class="new-chat">➕ 新建对话</button>
+                            <div class="conv-list" id="convList"></div>
+                        </div>
+                        <div class="main">
+                            <div class="chat-header">
+                                <button class="hamburger" id="hamburgerBtn">☰</button>
+                                <select id="modelSelect" class="model-select"><option value="v4" ${store.get('selectedModel')==='v4'?'selected':''}>DeepSeek V4 (深度推理)</option><option value="v3" ${store.get('selectedModel')==='v3'?'selected':''}>DeepSeek V3.2 (高速对话)</option></select>
+                                <label class="think-toggle"><span>🧠 深度思考</span><div class="switch"><input type="checkbox" id="deepCheck" ${store.get('deepThink')?'checked':''}><span class="slider"></span></div></label>
+                            </div>
+                            <div class="messages" id="messagesContainer"><div class="empty-state">${TEXT.LOADING}</div></div>
+                            <div class="input-area"><textarea id="chatInput" rows="1" placeholder="输入消息... (Enter 发送，Shift+Enter 换行)" maxlength="${MAX_MESSAGE_LENGTH}"></textarea><button id="sendBtn" class="send-btn">发送</button></div>
+                        </div>
+                    </div>
+                `;
+                convListContainer = document.getElementById('convList'); messagesContainer = document.getElementById('messagesContainer');
+                chatInput = document.getElementById('chatInput'); sendBtn = document.getElementById('sendBtn');
+                modelSelect = document.getElementById('modelSelect'); deepCheck = document.getElementById('deepCheck');
+                logoutBtn = document.getElementById('logoutBtn'); newChatBtn = document.getElementById('newChatBtn');
+                hamburgerBtn = document.getElementById('hamburgerBtn'); sidebarEl = document.getElementById('sidebarEl');
+                sidebarOverlay = document.getElementById('sidebarOverlay'); apiKeyBadge = document.getElementById('apiKeyBadge');
+                apiKeyModal = document.getElementById('apiKeyModal'); apiKeyInput = document.getElementById('apiKeyInput');
+                if (apiKeyBadge) apiKeyBadge.addEventListener('click', () => { apiKeyModal.classList.add('show'); });
+                document.getElementById('saveApiKeyBtn')?.addEventListener('click', async () => { await saveCustomApiKey(apiKeyInput.value); apiKeyModal.classList.remove('show'); apiKeyInput.value = ''; });
+                document.getElementById('clearApiKeyBtn')?.addEventListener('click', async () => { await clearCustomApiKey(); apiKeyModal.classList.remove('show'); apiKeyInput.value = ''; });
+                document.getElementById('closeApiKeyModal')?.addEventListener('click', () => { apiKeyModal.classList.remove('show'); apiKeyInput.value = ''; });
+                logoutBtn.addEventListener('click', async () => { await supabase.auth.signOut(); });
+                newChatBtn.addEventListener('click', async () => { await createNewConversation(); });
+                modelSelect.addEventListener('change', (e) => store.set('selectedModel', e.target.value));
+                deepCheck.addEventListener('change', (e) => store.set('deepThink', e.target.checked));
+                sendBtn.addEventListener('click', sendMessage);
+                chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+                chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
+                hamburgerBtn.addEventListener('click', () => { sidebarEl.classList.toggle('open'); sidebarOverlay.classList.toggle('active'); });
+                sidebarOverlay.addEventListener('click', () => { sidebarEl.classList.remove('open'); sidebarOverlay.classList.remove('active'); });
+                convListContainer?.addEventListener('click', (e) => { if (e.target.closest('.conv-title') && window.innerWidth <= 768) { sidebarEl.classList.remove('open'); sidebarOverlay.classList.remove('active'); } });
+                store.set('layoutBuilt', true);
+                loadCustomApiKey().then(() => refreshChatData());
+            }
 
-            // 启动
+            supabase.auth.onAuthStateChange(() => { setTimeout(() => checkSession(), 100); });
+            async function checkSession() {
+                const { data, error } = await supabase.auth.getSession();
+                if (error || !data?.session) { store.set('currentUser', null); showLogin(); return; }
+                const newUser = data.session.user;
+                const currentUser = store.get('currentUser');
+                if (currentUser && currentUser.id === newUser.id && store.get('layoutBuilt')) { store.set('currentUser', newUser); await refreshChatData(); return; }
+                store.set('currentUser', newUser);
+                if (!store.get('layoutBuilt')) buildChatLayout(); else await refreshChatData();
+                await loadCustomApiKey();
+            }
             checkSession();
         })();
     </script>
